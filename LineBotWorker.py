@@ -1,22 +1,33 @@
-import json
 from linebot import LineBotApi, WebhookHandler
-from linebot.exceptions import InvalidSignatureError
+from linebot.exceptions import LineBotApiError, InvalidSignatureError
 from linebot.models import MessageEvent, TextMessage, TextSendMessage
+import requests, traceback, json, sys, os
 
-def linebot(request):
+
+channel_secret = os.getenv('LINE_CHANNEL_SECRET', None)
+channel_access_token = os.getenv('LINE_CHANNEL_ACCESS_TOKEN', None)
+
+line_bot_api = LineBotApi(channel_access_token)
+handler = WebhookHandler(channel_secret)    
+
+def compose_textReplyMessage(userId, messageText):
+    return TextSendMessage(text='Please wait %s！' % messageText)
+
+@handler.add(MessageEvent, message=TextMessage)    
+def handle_text_message(event):
+    userId = event.source.user_id
+    messageText = event.message.text
+    line_bot_api.reply_message(event.reply_token, compose_textReplyMessage(userId, messageText))
+
+def lambda_handler(event, context):
     try:
-        access_token = '你的 LINE Channel access token'
-        secret = '你的 LINE Channel secret'
-        body = request.get_data(as_text=True)
-        json_data = json.loads(body)
-        line_bot_api = LineBotApi(access_token)
-        handler = WebhookHandler(secret)
-        signature = request.headers['X-Line-Signature']
+        signature = event['headers']['x-line-signature']
+        body = event['body']        
         handler.handle(body, signature)
-        msg = json_data['events'][0]['message']['text']
-        tk = json_data['events'][0]['replyToken']
-        line_bot_api.reply_message(tk,TextSendMessage(msg))
-        print(msg, tk)
-    except:
-        print(request.args)
-    return 'OK'
+    except Exception as e:
+        return {
+            'statusCode': 500,
+            'body': json.dumps('server error') }
+    return {
+        'statusCode': 200,
+        'body': json.dumps('OK') }
